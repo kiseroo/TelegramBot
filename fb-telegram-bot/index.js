@@ -9,6 +9,11 @@ const PORT = process.env.PORT || 3000;
 // Middleware to parse JSON bodies
 app.use(bodyParser.json());
 
+// Add a home route so you can see the bot is alive in the browser
+app.get('/', (req, res) => {
+  res.send('Your Facebook connection is active! Bot is running.');
+});
+
 // 1. Facebook Webhook Verification
 // This is called by Facebook when you first set up the webhook to verify your server.
 app.get('/webhook', (req, res) => {
