@@ -6,16 +6,18 @@ const axios = require('axios');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Store pending orders in memory (in production, use a database)
+const pendingOrders = new Map();
+
 // Middleware to parse JSON bodies
 app.use(bodyParser.json());
 
 // Add a home route so you can see the bot is alive in the browser
 app.get('/', (req, res) => {
-  res.send('Your Facebook connection is active! Bot is running.');
+  res.send('✅ Your Facebook → Telegram Bot is running!');
 });
 
 // 1. Facebook Webhook Verification
-// This is called by Facebook when you first set up the webhook to verify your server.
 app.get('/webhook', (req, res) => {
   const mode = req.query['hub.mode'];
   const token = req.query['hub.verify_token'];
@@ -29,51 +31,66 @@ app.get('/webhook', (req, res) => {
       res.sendStatus(403);
     }
   } else {
-    res.sendStatus(400); // Bad Request
+    res.sendStatus(400);
   }
 });
 
-// 2. Handle Incoming Messages
+// 2. Handle Incoming Facebook Messages
 app.post('/webhook', async (req, res) => {
   const body = req.body;
 
-  // Check if this is an event from a page subscription
   if (body.object === 'page') {
-    // Iterate over each entry - there may be multiple if batched
     for (const entry of body.entry) {
-      // Get the webhook event. entry.messaging is an array, but usually contains one event
       const webhook_event = entry.messaging ? entry.messaging[0] : null;
 
       if (webhook_event && webhook_event.message) {
         await handleMessage(webhook_event.sender.id, webhook_event.message);
       }
     }
-
-    // Return a '200 OK' response to all requests
     res.status(200).send('EVENT_RECEIVED');
   } else {
-    // Return a '404 Not Found' if event is not from a page subscription
     res.sendStatus(404);
   }
 });
 
-async function handleMessage(senderPsid, received_message) {
-  let response;
+// 3. Handle Telegram Callback Queries (Button Clicks)
+app.post('/telegram-webhook', async (req, res) => {
+  const update = req.body;
 
-  // Check if the message contains text
+  if (update.callback_query) {
+    const callbackQuery = update.callback_query;
+    const data = callbackQuery.data; // e.g., "confirm_123456" or "reject_123456"
+    const messageId = callbackQuery.message.message_id;
+
+    const [action, senderId] = data.split('_');
+
+    if (action === 'confirm') {
+      await sendFacebookMessage(senderId, '✅ Your order has been confirmed! Thank you.');
+      await editTelegramMessage(messageId, `✅ Order CONFIRMED for user ${senderId}`);
+    } else if (action === 'reject') {
+      await sendFacebookMessage(senderId, '❌ No payment made yet. Please complete payment first.');
+      await editTelegramMessage(messageId, `❌ Order REJECTED for user ${senderId}`);
+    }
+
+    // Answer the callback to remove loading state
+    await axios.post(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/answerCallbackQuery`, {
+      callback_query_id: callbackQuery.id
+    });
+  }
+
+  res.sendStatus(200);
+});
+
+async function handleMessage(senderPsid, received_message) {
   if (received_message.text) {
-    // You can handle text messages here if you want
     console.log(`Received text: "${received_message.text}" from ${senderPsid}`);
   }
 
-  // Check if the message contains attachments
   if (received_message.attachments) {
     for (const attachment of received_message.attachments) {
       if (attachment.type === 'image') {
         const imageUrl = attachment.payload.url;
         console.log(`Received image from ${senderPsid}: ${imageUrl}`);
-        
-        // Send to Telegram
         await sendToTelegram(senderPsid, imageUrl);
       }
     }
@@ -83,24 +100,68 @@ async function handleMessage(senderPsid, received_message) {
 async function sendToTelegram(senderId, imageUrl) {
   const telegramBotToken = process.env.TELEGRAM_BOT_TOKEN;
   const chatId = process.env.TELEGRAM_CHAT_ID;
-  
+
   if (!telegramBotToken || !chatId) {
     console.error("Telegram credentials not set.");
     return;
   }
 
-  const caption = `New photo received on Facebook Page!\nSender ID: ${senderId}`;
+  const caption = `📸 New order image received!\n👤 Sender ID: ${senderId}`;
   const url = `https://api.telegram.org/bot${telegramBotToken}/sendPhoto`;
 
   try {
     await axios.post(url, {
       chat_id: chatId,
       photo: imageUrl,
-      caption: caption
+      caption: caption,
+      reply_markup: {
+        inline_keyboard: [
+          [
+            { text: '✅ Confirm Order', callback_data: `confirm_${senderId}` },
+            { text: '❌ Reject Order', callback_data: `reject_${senderId}` }
+          ]
+        ]
+      }
     });
-    console.log('Successfully sent photo to Telegram');
+    console.log('Successfully sent photo to Telegram with buttons');
   } catch (error) {
     console.error('Error sending to Telegram:', error.response ? error.response.data : error.message);
+  }
+}
+
+async function sendFacebookMessage(recipientId, messageText) {
+  const pageAccessToken = process.env.FB_PAGE_ACCESS_TOKEN;
+
+  if (!pageAccessToken) {
+    console.error('FB_PAGE_ACCESS_TOKEN not set');
+    return;
+  }
+
+  const url = `https://graph.facebook.com/v18.0/me/messages?access_token=${pageAccessToken}`;
+
+  try {
+    await axios.post(url, {
+      recipient: { id: recipientId },
+      message: { text: messageText }
+    });
+    console.log(`Sent message to Facebook user ${recipientId}: ${messageText}`);
+  } catch (error) {
+    console.error('Error sending Facebook message:', error.response ? error.response.data : error.message);
+  }
+}
+
+async function editTelegramMessage(messageId, newText) {
+  const telegramBotToken = process.env.TELEGRAM_BOT_TOKEN;
+  const chatId = process.env.TELEGRAM_CHAT_ID;
+
+  try {
+    await axios.post(`https://api.telegram.org/bot${telegramBotToken}/editMessageCaption`, {
+      chat_id: chatId,
+      message_id: messageId,
+      caption: newText
+    });
+  } catch (error) {
+    console.error('Error editing Telegram message:', error.response ? error.response.data : error.message);
   }
 }
 
