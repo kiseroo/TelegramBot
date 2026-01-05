@@ -9,6 +9,10 @@ const PORT = process.env.PORT || 3000;
 // Store pending orders in memory (in production, use a database)
 const pendingOrders = new Map();
 
+// Rate limiting: Store last request time per user
+const userLastRequest = new Map();
+const RATE_LIMIT_SECONDS = 30; // 1 image per 30 seconds per user
+
 // Middleware to parse JSON bodies
 app.use(bodyParser.json());
 
@@ -118,6 +122,20 @@ async function handleMessage(senderPsid, received_message) {
       if (attachment.type === 'image') {
         const imageUrl = attachment.payload.url;
         console.log(`Received image from ${senderPsid}: ${imageUrl}`);
+
+        // Rate limiting check
+        const now = Date.now();
+        const lastRequest = userLastRequest.get(senderPsid);
+
+        if (lastRequest && (now - lastRequest) < RATE_LIMIT_SECONDS * 1000) {
+          const waitSeconds = Math.ceil((RATE_LIMIT_SECONDS * 1000 - (now - lastRequest)) / 1000);
+          console.log(`Rate limited user ${senderPsid}, must wait ${waitSeconds}s`);
+          await sendFacebookMessage(senderPsid, `⏳ Түр хүлээнэ үү, ${waitSeconds} секундын дараа дахин оролдоно уу`);
+          return; // Don't process this image
+        }
+
+        // Update last request time
+        userLastRequest.set(senderPsid, now);
 
         // Get user name from Facebook
         let userName = 'Unknown';
