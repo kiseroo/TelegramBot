@@ -21,6 +21,11 @@ app.get('/', (req, res) => {
   res.send('✅ Your Facebook → Telegram Bot is running!');
 });
 
+// Health check endpoint for monitoring (UptimeRobot)
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
 // 1. Facebook Webhook Verification
 app.get('/webhook', (req, res) => {
   const mode = req.query['hub.mode'];
@@ -97,7 +102,15 @@ app.post('/telegram-webhook', async (req, res) => {
 
     try {
       if (action === 'confirm') {
-        await sendFacebookMessage(senderId, '✅Мөнгө орсон байна, захиалга баталгаажлаа');
+        const confirmMessage = `✅Төлбөр баталгаажлаа ✅
+Та энэхүү линкээр орж хятадаас бараа захиалах заавар видеог үзээрэй
+
+Facebook group link:
+https://www.facebook.com/groups/867966362520705
+
+Instagram link:
+https://www.instagram.com/junj.surgalt/`;
+        await sendFacebookMessage(senderId, confirmMessage);
         await editTelegramMessage(messageId, `✅ БАТАЛГААЖЛАА\n👤 ${nameDisplay}\n🆔 #${shortId}`);
       } else if (action === 'reject') {
         await sendFacebookMessage(senderId, '❌Мөнгө ороогүй байна та гүйлгээгээ шалгаад ахин хуулгаа явуулна уу');
