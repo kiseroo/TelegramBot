@@ -52,30 +52,44 @@ app.post('/webhook', async (req, res) => {
     res.sendStatus(404);
   }
 });
-
 // 3. Handle Telegram Callback Queries (Button Clicks)
 app.post('/telegram-webhook', async (req, res) => {
   const update = req.body;
 
   if (update.callback_query) {
     const callbackQuery = update.callback_query;
-    const data = callbackQuery.data; // e.g., "confirm_123456" or "reject_123456"
+    const data = callbackQuery.data; // e.g., "confirm_123456789" or "reject_123456789"
     const messageId = callbackQuery.message.message_id;
 
-    const [action, senderId] = data.split('_');
+    // Split only on first underscore to get action and full sender ID
+    const underscoreIndex = data.indexOf('_');
+    const action = data.substring(0, underscoreIndex);
+    const senderId = data.substring(underscoreIndex + 1);
 
-    if (action === 'confirm') {
-      await sendFacebookMessage(senderId, '✅Мөнгө орсон байна, захиалга баталгаажлаа');
-      await editTelegramMessage(messageId, `✅ Order CONFIRMED for user ${senderId}`);
-    } else if (action === 'reject') {
-      await sendFacebookMessage(senderId, '❌Мөнгө ороогүй байна та гүйлгээгээ шалгаад ахин хуулгаа явуулна уу');
-      await editTelegramMessage(messageId, `❌ Order REJECTED for user ${senderId}`);
+    console.log(`Button clicked: action=${action}, senderId=${senderId}`);
+
+    // Answer callback query FIRST to remove loading state
+    try {
+      await axios.post(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/answerCallbackQuery`, {
+        callback_query_id: callbackQuery.id
+      });
+    } catch (err) {
+      console.error('Error answering callback:', err.message);
     }
 
-    // Answer the callback to remove loading state
-    await axios.post(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/answerCallbackQuery`, {
-      callback_query_id: callbackQuery.id
-    });
+    // Then send messages
+    try {
+      if (action === 'confirm') {
+        await sendFacebookMessage(senderId, '✅Мөнгө орсон байна, захиалга баталгаажлаа');
+        await editTelegramMessage(messageId, `✅ Order CONFIRMED for user ${senderId}`);
+      } else if (action === 'reject') {
+        await sendFacebookMessage(senderId, '❌Мөнгө ороогүй байна та гүйлгээгээ шалгаад ахин хуулгаа явуулна уу');
+        await editTelegramMessage(messageId, `❌ Order REJECTED for user ${senderId}`);
+      }
+    } catch (err) {
+      console.error('Error processing action:', err.response?.data || err.message);
+      await editTelegramMessage(messageId, `⚠️ Error: Could not send message to Facebook user`);
+    }
   }
 
   res.sendStatus(200);
