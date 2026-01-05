@@ -130,11 +130,29 @@ async function handleMessage(senderPsid, received_message) {
 
 async function getUserName(userId) {
   const pageAccessToken = process.env.FB_PAGE_ACCESS_TOKEN;
-  if (!pageAccessToken) return 'Unknown';
+  if (!pageAccessToken) {
+    console.error('FB_PAGE_ACCESS_TOKEN not set for getUserName');
+    return 'Unknown';
+  }
 
   try {
-    const response = await axios.get(`https://graph.facebook.com/${userId}?fields=name&access_token=${pageAccessToken}`);
-    return response.data.name || 'Unknown';
+    // Use first_name and last_name which are more reliably returned
+    const response = await axios.get(
+      `https://graph.facebook.com/${userId}?fields=first_name,last_name,name&access_token=${pageAccessToken}`
+    );
+
+    console.log('Facebook user data:', response.data);
+
+    // Try different name fields
+    if (response.data.name) {
+      return response.data.name;
+    } else if (response.data.first_name) {
+      const firstName = response.data.first_name || '';
+      const lastName = response.data.last_name || '';
+      return `${firstName} ${lastName}`.trim() || 'Unknown';
+    }
+
+    return 'Unknown';
   } catch (error) {
     console.error('Error fetching user name:', error.response?.data || error.message);
     return 'Unknown';
