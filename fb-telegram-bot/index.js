@@ -65,10 +65,10 @@ app.post('/telegram-webhook', async (req, res) => {
     const [action, senderId] = data.split('_');
 
     if (action === 'confirm') {
-      await sendFacebookMessage(senderId, '✅ Your order has been confirmed! Thank you.');
+      await sendFacebookMessage(senderId, 'Мөнгө орсон байна, захиалга баталгаажлаа');
       await editTelegramMessage(messageId, `✅ Order CONFIRMED for user ${senderId}`);
     } else if (action === 'reject') {
-      await sendFacebookMessage(senderId, '❌ No payment made yet. Please complete payment first.');
+      await sendFacebookMessage(senderId, 'Мөнгө ороогүй байна та гүйлгээгээ шалгаад ахин хуулгаа явуулна уу');
       await editTelegramMessage(messageId, `❌ Order REJECTED for user ${senderId}`);
     }
 
