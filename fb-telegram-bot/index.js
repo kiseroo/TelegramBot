@@ -26,6 +26,64 @@ app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// Privacy Policy page for Facebook App Review
+app.get('/privacy', (req, res) => {
+  const html = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Privacy Policy</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; line-height: 1.6; }
+    h1 { color: #333; }
+    h2 { color: #555; margin-top: 30px; }
+    p { color: #666; }
+  </style>
+</head>
+<body>
+  <h1>Privacy Policy</h1>
+  <p><strong>Last updated:</strong> January 2026</p>
+  
+  <h2>1. Information We Collect</h2>
+  <p>When you interact with our Facebook Page via Messenger, we may receive:</p>
+  <ul>
+    <li>Your Facebook user ID</li>
+    <li>Messages and images you send to our Page</li>
+    <li>Your public profile information (name, if available)</li>
+  </ul>
+  
+  <h2>2. How We Use Your Information</h2>
+  <p>We use the information to:</p>
+  <ul>
+    <li>Process your orders and payment confirmations</li>
+    <li>Respond to your inquiries</li>
+    <li>Provide customer support</li>
+  </ul>
+  
+  <h2>3. Data Sharing</h2>
+  <p>We do not sell or share your personal information with third parties, except as necessary to provide our services or as required by law.</p>
+  
+  <h2>4. Data Retention</h2>
+  <p>We retain your information only as long as necessary to fulfill the purposes outlined in this policy.</p>
+  
+  <h2>5. Your Rights</h2>
+  <p>You have the right to:</p>
+  <ul>
+    <li>Request access to your data</li>
+    <li>Request deletion of your data</li>
+    <li>Opt-out of communications</li>
+  </ul>
+  
+  <h2>6. Contact Us</h2>
+  <p>If you have questions about this Privacy Policy, please contact us through our Facebook Page.</p>
+</body>
+</html>
+  `;
+  res.send(html);
+});
+
 // 1. Facebook Webhook Verification
 app.get('/webhook', (req, res) => {
   const mode = req.query['hub.mode'];
