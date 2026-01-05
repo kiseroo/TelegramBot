@@ -44,6 +44,8 @@ app.post('/webhook', async (req, res) => {
       const webhook_event = entry.messaging ? entry.messaging[0] : null;
 
       if (webhook_event && webhook_event.message) {
+        // Log the full event to see what Facebook sends
+        console.log('Full webhook event:', JSON.stringify(webhook_event, null, 2));
         await handleMessage(webhook_event.sender.id, webhook_event.message);
       }
     }
@@ -86,13 +88,16 @@ app.post('/telegram-webhook', async (req, res) => {
     }
 
     // Then send messages
+    const shortId = senderId.slice(-6);
+    const nameDisplay = userName !== 'Unknown' ? userName : 'Шинэ хэрэглэгч';
+
     try {
       if (action === 'confirm') {
         await sendFacebookMessage(senderId, '✅Мөнгө орсон байна, захиалга баталгаажлаа');
-        await editTelegramMessage(messageId, `✅ БАТАЛГААЖЛАА\n👤 ${userName}\n🆔 ${senderId}`);
+        await editTelegramMessage(messageId, `✅ БАТАЛГААЖЛАА\n👤 ${nameDisplay}\n🆔 #${shortId}`);
       } else if (action === 'reject') {
         await sendFacebookMessage(senderId, '❌Мөнгө ороогүй байна та гүйлгээгээ шалгаад ахин хуулгаа явуулна уу');
-        await editTelegramMessage(messageId, `❌ ТАТГАЛЗСАН\n👤 ${userName}\n🆔 ${senderId}`);
+        await editTelegramMessage(messageId, `❌ ТАТГАЛЗСАН\n👤 ${nameDisplay}\n🆔 #${shortId}`);
       }
     } catch (err) {
       console.error('Error processing action:', err.response?.data || err.message);
@@ -168,7 +173,10 @@ async function sendToTelegram(senderId, imageUrl, userName = 'Unknown') {
     return;
   }
 
-  const caption = `📸 Шинэ захиалга!\n👤 Нэр: ${userName}\n🆔 ID: ${senderId}\n⏳ Хүлээгдэж байна...`;
+  // Create caption - show name if available, otherwise just show ID
+  const shortId = senderId.slice(-6); // Last 6 digits of ID for easy reference
+  const nameDisplay = userName !== 'Unknown' ? `👤 ${userName}` : '👤 Шинэ хэрэглэгч';
+  const caption = `📸 Шинэ захиалга!\n${nameDisplay}\n🆔 #${shortId}\n⏳ Хүлээгдэж байна...`;
   const url = `https://api.telegram.org/bot${telegramBotToken}/sendPhoto`;
 
   try {
