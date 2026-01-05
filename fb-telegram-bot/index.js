@@ -77,14 +77,22 @@ app.post('/telegram-webhook', async (req, res) => {
       console.error('Error answering callback:', err.message);
     }
 
+    // Get user name for display
+    let userName = 'Unknown';
+    try {
+      userName = await getUserName(senderId);
+    } catch (err) {
+      console.error('Error getting user name:', err.message);
+    }
+
     // Then send messages
     try {
       if (action === 'confirm') {
         await sendFacebookMessage(senderId, '✅Мөнгө орсон байна, захиалга баталгаажлаа');
-        await editTelegramMessage(messageId, `✅ Order CONFIRMED for user ${senderId}`);
+        await editTelegramMessage(messageId, `✅ БАТАЛГААЖЛАА\n👤 ${userName}\n🆔 ${senderId}`);
       } else if (action === 'reject') {
         await sendFacebookMessage(senderId, '❌Мөнгө ороогүй байна та гүйлгээгээ шалгаад ахин хуулгаа явуулна уу');
-        await editTelegramMessage(messageId, `❌ Order REJECTED for user ${senderId}`);
+        await editTelegramMessage(messageId, `❌ ТАТГАЛЗСАН\n👤 ${userName}\n🆔 ${senderId}`);
       }
     } catch (err) {
       console.error('Error processing action:', err.response?.data || err.message);
@@ -105,13 +113,35 @@ async function handleMessage(senderPsid, received_message) {
       if (attachment.type === 'image') {
         const imageUrl = attachment.payload.url;
         console.log(`Received image from ${senderPsid}: ${imageUrl}`);
-        await sendToTelegram(senderPsid, imageUrl);
+
+        // Get user name from Facebook
+        let userName = 'Unknown';
+        try {
+          userName = await getUserName(senderPsid);
+        } catch (err) {
+          console.error('Error getting user name:', err.message);
+        }
+
+        await sendToTelegram(senderPsid, imageUrl, userName);
       }
     }
   }
 }
 
-async function sendToTelegram(senderId, imageUrl) {
+async function getUserName(userId) {
+  const pageAccessToken = process.env.FB_PAGE_ACCESS_TOKEN;
+  if (!pageAccessToken) return 'Unknown';
+
+  try {
+    const response = await axios.get(`https://graph.facebook.com/${userId}?fields=name&access_token=${pageAccessToken}`);
+    return response.data.name || 'Unknown';
+  } catch (error) {
+    console.error('Error fetching user name:', error.response?.data || error.message);
+    return 'Unknown';
+  }
+}
+
+async function sendToTelegram(senderId, imageUrl, userName = 'Unknown') {
   const telegramBotToken = process.env.TELEGRAM_BOT_TOKEN;
   const chatId = process.env.TELEGRAM_CHAT_ID;
 
@@ -120,7 +150,7 @@ async function sendToTelegram(senderId, imageUrl) {
     return;
   }
 
-  const caption = `📸 New order image received!\n👤 Sender ID: ${senderId}`;
+  const caption = `📸 Шинэ захиалга!\n👤 Нэр: ${userName}\n🆔 ID: ${senderId}\n⏳ Хүлээгдэж байна...`;
   const url = `https://api.telegram.org/bot${telegramBotToken}/sendPhoto`;
 
   try {
@@ -131,8 +161,8 @@ async function sendToTelegram(senderId, imageUrl) {
       reply_markup: {
         inline_keyboard: [
           [
-            { text: '✅ Confirm Order', callback_data: `confirm_${senderId}` },
-            { text: '❌ Reject Order', callback_data: `reject_${senderId}` }
+            { text: '✅ Баталгаажуулах', callback_data: `confirm_${senderId}` },
+            { text: '❌ Татгалзах', callback_data: `reject_${senderId}` }
           ]
         ]
       }
